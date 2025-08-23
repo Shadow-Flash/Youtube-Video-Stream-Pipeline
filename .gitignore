@@ -1,0 +1,6 @@
+.env
+kafka/data
+archPlan.md
+error.txt
+virtualpy
+__pycache__

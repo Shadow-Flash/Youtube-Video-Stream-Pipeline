@@ -1,0 +1,46 @@
+services:
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    hostname: kafka
+    ports:
+      - "9094:9094" # external (host) listener
+    environment:
+      - KAFKA_HEAP_OPTS=-Xmx768m -Xms768m
+    volumes:
+      - ./kafka/config:/opt/kafka/config/kraft:ro
+      - ./kafka/data:/var/lib/kafka/data
+    command: >
+      bash -euxo pipefail -c '
+        if [ ! -f "/var/lib/kafka/data/meta.properties" ]; then
+          CLUSTER_ID=$(/opt/kafka/bin/kafka-storage.sh random-uuid);
+          /opt/kafka/bin/kafka-storage.sh format -t "$CLUSTER_ID" -c /opt/kafka/config/kraft/server.properties;
+        fi;
+        exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
+      '
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh",
+          "--bootstrap-server",
+          "localhost:9092",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: "no" # if Kafka fails, exit and don't loop
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy # do not start unless Kafka is healthy
+    ports:
+      - "8085:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    restart: "no"
