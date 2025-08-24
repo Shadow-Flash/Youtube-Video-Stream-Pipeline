@@ -1,46 +1,52 @@
-import json
 from confluent_kafka import Consumer, KafkaException
+from app.schema import EnvSettings, ConsumerReturn, OffsetType
 
-BOOTSTRAP_SERVERS = "localhost:9094"  # adjust if needed
-TOPIC = "ingest.requests"
-GROUP_ID = "ingest-consumer-group"
+settings = EnvSettings()
 
 
-def main():
+def init_consumer(
+    topic_name: str, group_id: str, offset: OffsetType
+) -> ConsumerReturn | None:
     conf = {
-        "bootstrap.servers": BOOTSTRAP_SERVERS,
-        "group.id": GROUP_ID,
-        "auto.offset.reset": "earliest",  # consume from beginning
+        "bootstrap.servers": settings.bootstrap_server,
+        "group.id": group_id,
+        "auto.offset.reset": offset,
     }
 
     consumer = Consumer(conf)
-    consumer.subscribe([TOPIC])
+    consumer.subscribe([topic_name])
+    msg_list = []
 
-    print(f"✅ Listening for messages on topic '{TOPIC}'...")
-
+    print(f"✅ Listening for messages on topic '{topic_name}'...")
     try:
         while True:
-            msg = consumer.poll(1.0)  # wait up to 1s
+            msg = consumer.poll(5.0)
             if msg is None:
-                continue
+                break
             if msg.error():
-                raise KafkaException(msg.error())
-
-            key = msg.key().decode("utf-8") if msg.key() else None
-            value = msg.value().decode("utf-8")
-
-            try:
-                payload = json.loads(value.replace("'", '"'))  # fix str→dict encoding
-            except Exception:
-                payload = value
-
-            print(f"📩 Received message | key={key} | value={payload}")
+                if msg.error().code() == KafkaException._PARTITION_EOF:
+                    print(f"End of partition for {topic_name} reached.")
+                    continue
+                else:
+                    print(f"Consumer error: {msg.error()}")
+                    break
+            else:
+                # Process the received message
+                msg_list.append(
+                    {
+                        "key": msg.key().decode("utf-8") if msg.key() else None,
+                        "value": (
+                            msg.value()
+                            if isinstance(msg.value(), bytes)
+                            else msg.value().decode("utf-8")
+                        ),
+                        "headers": msg.headers() if msg.headers() else None,
+                    }
+                )
 
     except KeyboardInterrupt:
-        print("👋 Shutting down consumer...")
+        print("Consumer stopped by user.")
     finally:
         consumer.close()
-
-
-if __name__ == "__main__":
-    main()
+        print("Consumer closed.")
+        return msg_list

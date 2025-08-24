@@ -1,5 +1,5 @@
 from confluent_kafka.admin import AdminClient, NewTopic
-from app.api.schema import EnvSettings
+from app.schema import EnvSettings
 
 settings = EnvSettings()
 
