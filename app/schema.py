@@ -15,6 +15,8 @@ class EnvSettings(BaseSettings):
     topic_media_moderation: str
     group_id_ingest_url: str
     group_id_audio_raw: str
+    group_id_transcript: str
+    group_id_transcript_2: str
     offset_latest: str
     offset_earliest: str
     sample_rate: int
